@@ -60,120 +60,15 @@ local FPS = 0
 local player = Players.LocalPlayer
 
 --// Library Setup
-local oldCreateLabel = Library.CreateLabel
-function Library:CreateLabel(...)
-	local label = oldCreateLabel(self, ...)
-	label.RichText = true
-	return label
-end
+-- RichText is handled natively by the UI library now (labels, watermark, notifications).
+Library.RichText = true
 
-local oldSetWatermark = Library.SetWatermark
-function Library:SetWatermark(text)
-	oldSetWatermark(self, text)
-	if self.Watermark and self.WatermarkText then
-		self.WatermarkText.RichText = true
-		local cleanText = text:gsub("<[^>]+>", "")
-		local textSize = TextService:GetTextSize(
-			cleanText,
-			self.WatermarkText.TextSize,
-			self.WatermarkText.Font,
-			Vector2.new(math.huge, math.huge)
-		)
-		self.Watermark.Size = UDim2.fromOffset(textSize.X + 15, 22)
-	end
-end
-
--- Override Notify to support RichText and proper sizing
-function Library:Notify(Text, Time)
-	local cleanText = Text:gsub("<[^>]+>", "")
-	local font = Enum.Font.GothamMedium
-	local textSize = 14
-	local textBounds = TextService:GetTextSize(cleanText, textSize, font, Vector2.new(math.huge, math.huge))
-	local XSize, YSize = textBounds.X + 20, textBounds.Y + 7
-
-	local NotifyOuter = Library:Create("Frame", {
-		BorderColor3 = Color3.new(0, 0, 0),
-		Position = UDim2.fromOffset(100, 10),
-		Size = UDim2.fromOffset(0, YSize),
-		ClipsDescendants = true,
-		ZIndex = 100,
-		Parent = Library.NotificationArea,
-	})
-
-	local NotifyInner = Library:Create("Frame", {
-		BackgroundColor3 = Library.MainColor,
-		BorderColor3 = Library.OutlineColor,
-		BorderMode = Enum.BorderMode.Inset,
-		Size = UDim2.fromScale(1, 1),
-		ZIndex = 101,
-		Parent = NotifyOuter,
-	})
-
-	Library:AddToRegistry(NotifyInner, {
-		BackgroundColor3 = "MainColor",
-		BorderColor3 = "OutlineColor",
-	}, true)
-
-	local InnerFrame = Library:Create("Frame", {
-		BackgroundColor3 = Color3.new(1, 1, 1),
-		BorderSizePixel = 0,
-		Position = UDim2.fromOffset(1, 1),
-		Size = UDim2.new(1, -2, 1, -2),
-		ZIndex = 102,
-		Parent = NotifyInner,
-	})
-
-	local Gradient = Library:Create("UIGradient", {
-		Color = ColorSequence.new({
-			ColorSequenceKeypoint.new(0, Library:GetDarkerColor(Library.MainColor)),
-			ColorSequenceKeypoint.new(1, Library.MainColor),
-		}),
-		Rotation = -90,
-		Parent = InnerFrame,
-	})
-
-	Library:AddToRegistry(Gradient, {
-		Color = function()
-			return ColorSequence.new({
-				ColorSequenceKeypoint.new(0, Library:GetDarkerColor(Library.MainColor)),
-				ColorSequenceKeypoint.new(1, Library.MainColor),
-			})
-		end,
-	})
-
-	local NotifyLabel = Library:CreateLabel({
-		Position = UDim2.fromOffset(4, 0),
-		Size = UDim2.new(1, -4, 1, 0),
-		Text = Text,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextSize = textSize,
-		RichText = true,
-		ZIndex = 103,
-		Parent = InnerFrame,
-	})
-
-	local LeftColor = Library:Create("Frame", {
-		BackgroundColor3 = Library.AccentColor,
-		BorderSizePixel = 0,
-		Position = UDim2.fromOffset(-1, -1),
-		Size = UDim2.new(0, 3, 1, 2),
-		ZIndex = 104,
-		Parent = NotifyOuter,
-	})
-
-	Library:AddToRegistry(LeftColor, {
-		BackgroundColor3 = "AccentColor",
-	}, true)
-
-	pcall(NotifyOuter.TweenSize, NotifyOuter, UDim2.fromOffset(XSize + 8 + 4, YSize), "Out", "Quad", 0.4, true)
-
-	task.spawn(function()
-		task.wait(Time or 5)
-		pcall(NotifyOuter.TweenSize, NotifyOuter, UDim2.fromOffset(0, YSize), "Out", "Quad", 0.4, true)
-		task.wait(0.4)
-		NotifyOuter:Destroy()
-	end)
-end
+-- Staff detection overlay (created once, toggled from the Misc tab)
+local StaffOverlay = Library:CreateModListOverlay({
+	Title = "Staff Watch",
+	CheckInterval = 5,
+	NotifyOnJoin = true,
+})
 
 --// UI Creation
 local Window = Library:CreateWindow({
@@ -371,6 +266,16 @@ VisualsGroup:AddButton("Reset MiniMap Position", function()
 	toggles.MiniMap:SetValue(false)
 end)
 
+local StaffGroup = Tabs.MiscTab:AddRightGroupbox("Staff Detector")
+toggles.StaffWatch = StaffGroup:AddToggle("StaffWatch", {
+	Text = "Staff Watch Overlay",
+	Default = false,
+	Tooltip = "Shows an overlay listing moderators/admins in the server and notifies when one joins",
+	Callback = function(v)
+		StaffOverlay:SetVisible(v)
+	end,
+})
+
 local ServerGroup = Tabs.MiscTab:AddLeftGroupbox("Server")
 ServerGroup:AddButton("Rejoin", function()
 	if config.KeepScriptOnRejoin then
@@ -404,9 +309,6 @@ Library.ToggleKeybind = config.MenuKeybind
 --// Watermark
 Library:SetWatermarkVisibility(true)
 Library.Watermark.Position = UDim2.fromOffset(15, 5)
-if Library.Watermark then
-	Library.WatermarkText.RichText = true
-end
 
 Library:SetWatermark(
 	'Shade<font color="#5a8cd7">.Luau</font> <font color="#909397">|</font> .. fps <font color="#909397">|</font> .. ms'
